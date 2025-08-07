@@ -58,5 +58,4 @@ You can now send commands from your WhatsApp-enabled phone to the Twilio Sandbox
 - `DELETE /file.txt`
 - `DELETE /file.txt CONFIRM`
 
-## License
-This project is licensed under the Apache License 2.0. See the `LICENSE` file for details.
+

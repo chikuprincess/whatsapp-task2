@@ -1,0 +1,260 @@
+{
+  "name": "WhatsApp Google Drive Assistant",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "twilioApi",
+        "accountSid": "={{$credentials.TWILIO_ACCOUNT_SID}}",
+        "authToken": "={{$credentials.TWILIO_AUTH_TOKEN}}",
+        "path": "webhook",
+        "options": {}
+      },
+      "name": "Twilio Trigger",
+      "type": "n8n-nodes-base.twilioTrigger",
+      "typeVersion": 1,
+      "position": [
+        450,
+        300
+      ],
+      "webhookId": "your-webhook-id-will-be-generated-here",
+      "credentials": {
+        "twilioApi": {
+          "id": "YOUR_TWILIO_CREDENTIAL_ID",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const body = $json.body.Body.trim();\nconst parts = body.split(/\\s+/);\nconst command = parts[0].toUpperCase();\nconst args = parts.slice(1);\n\nreturn [{ json: { command, args, originalMessage: body, from: $json.body.From } }];"
+      },
+      "name": "Parse Command",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.command}}",
+              "operation": "equal",
+              "value2": "LIST"
+            },
+            {
+              "value1": "={{$json.command}}",
+              "operation": "equal",
+              "value2": "SUMMARY"
+            },
+            {
+              "value1": "={{$json.command}}",
+              "operation": "equal",
+              "value2": "DELETE"
+            },
+            {
+              "value1": "={{$json.command}}",
+              "operation": "equal",
+              "value2": "MOVE"
+            }
+          ]
+        }
+      },
+      "name": "Switch by Command",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+        "parameters": {
+            "authentication": "oAuth2",
+            "operation": "list",
+            "path": "={{$json.args[0]}}",
+            "options": {}
+        },
+        "name": "List Files",
+        "type": "n8n-nodes-base.googleDrive",
+        "typeVersion": 1,
+        "position": [1100, 100],
+        "credentials": {
+            "googleDriveOAuth2Api": { "id": "YOUR_GOOGLE_CREDENTIAL_ID", "name": "Google account" }
+        }
+    },
+    {
+        "parameters": {
+            "functionCode": "const files = $items.map(item => item.json.name);\nconst output = files.length > 0 ? `Files in ${$node['Parse Command'].json.args[0]}:\\n- ${files.join('\\n- ')}` : `No files found in ${$node['Parse Command'].json.args[0]}`;\n$json.reply = output;\nreturn $json;"
+        },
+        "name": "Format List Reply",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 1,
+        "position": [1300, 100]
+    },
+    {
+      "parameters": {
+        "accountSid": "={{$credentials.TWILIO_ACCOUNT_SID}}",
+        "from": "={{$json.body.To}}",
+        "to": "={{$json.body.From}}",
+        "message": "={{$json.reply}}"
+      },
+      "name": "Send Reply",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        300
+      ],
+      "credentials": {
+        "twilioApi": {
+          "id": "YOUR_TWILIO_CREDENTIAL_ID",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+        "parameters": {
+            "authentication": "oAuth2",
+            "operation": "list",
+            "path": "={{$json.args[0]}}",
+            "options": {"mimeType": "application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
+        },
+        "name": "List Docs for Summary",
+        "type": "n8n-nodes-base.googleDrive",
+        "typeVersion": 1,
+        "position": [1100, 200],
+        "credentials": { "googleDriveOAuth2Api": { "id": "YOUR_GOOGLE_CREDENTIAL_ID", "name": "Google account" } }
+    },
+    {
+        "parameters": {
+            "authentication": "oAuth2",
+            "operation": "download",
+            "fileId": "={{$json.id}}",
+            "binary": true
+        },
+        "name": "Download Doc",
+        "type": "n8n-nodes-base.googleDrive",
+        "typeVersion": 1,
+        "position": [1300, 200],
+        "credentials": { "googleDriveOAuth2Api": { "id": "YOUR_GOOGLE_CREDENTIAL_ID", "name": "Google account" } }
+    },
+    {
+        "parameters": {
+            "model": "gpt-4o",
+            "prompt": "Summarize this document in 3 bullet points, focusing on its main purpose and key conclusions. Document Content: {{$binary.data.data}}",
+            "options": {}
+        },
+        "name": "Summarize with OpenAI",
+        "type": "n8n-nodes-base.openAiChat",
+        "typeVersion": 1,
+        "position": [1500, 200],
+        "credentials": { "openAiApi": { "id": "YOUR_OPENAI_CREDENTIAL_ID", "name": "OpenAI account" } }
+    },
+    {
+        "parameters": {
+            "functionCode": "const items = $items;\nlet summary = `AI Summary for folder ${$node['List Docs for Summary'].json.args[0]}:\\n\\n`;\nfor (const item of items) {\n  summary += `📄 *${item.json.fileName}*:\\n${item.json.summary}\\n\\n`;\n}\n$json.reply = summary;\nreturn $json;"
+        },
+        "name": "Format Summary Reply",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 1,
+        "position": [1700, 200]
+    },
+    {
+        "parameters": {
+            "conditions": { "string": [ { "value1": "={{$json.args[1]}}", "operation": "equal", "value2": "CONFIRM" } ] }
+        },
+        "name": "Check Delete Confirm",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [1100, 300]
+    },
+    {
+        "parameters": { "functionCode": "$json.reply = `⚠️ ARE YOU SURE? To delete '${$json.args[0]}', reply with:\\n\\nDELETE ${$json.args[0]} CONFIRM`\nreturn $json;"},
+        "name": "Ask for Confirmation",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 1,
+        "position": [1300, 400]
+    },
+    {
+        "parameters": { "authentication": "oAuth2", "operation": "delete", "path": "={{$json.args[0]}}", "options": {} },
+        "name": "Delete File",
+        "type": "n8n-nodes-base.googleDrive",
+        "typeVersion": 1,
+        "position": [1300, 300],
+        "credentials": { "googleDriveOAuth2Api": { "id": "YOUR_GOOGLE_CREDENTIAL_ID", "name": "Google account" } }
+    },
+    {
+        "parameters": { "functionCode": "$json.reply = `✅ Successfully deleted file: ${$json.args[0]}`\nreturn $json;"},
+        "name": "Format Delete Success",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 1,
+        "position": [1500, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "sheetId": "={{$credentials.GOOGLE_SHEET_ID_FOR_LOGS}}",
+        "operation": "append",
+        "range": "A1",
+        "options": {
+          "values": "={{ { 'Timestamp': new Date().toISOString(), 'User': $node['Parse Command'].json.from, 'Command': $node['Parse Command'].json.command, 'Details': $node['Parse Command'].json.originalMessage, 'Status': 'Success' } }}"
+        }
+      },
+      "name": "Log Action to Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 1,
+      "position": [
+        1700,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_CREDENTIAL_ID",
+          "name": "Google account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Twilio Trigger": { "main": [ [ { "node": "Parse Command", "type": "main", "index": 0 } ] ] },
+    "Parse Command": { "main": [ [ { "node": "Switch by Command", "type": "main", "index": 0 } ] ] },
+    "Switch by Command": {
+        "main": [
+            [ { "node": "List Files", "type": "main", "index": 0 } ],
+            [ { "node": "List Docs for Summary", "type": "main", "index": 1 } ],
+            [ { "node": "Check Delete Confirm", "type": "main", "index": 2 } ],
+            []
+        ]
+    },
+    "List Files": { "main": [ [ { "node": "Format List Reply", "type": "main", "index": 0 } ] ] },
+    "Format List Reply": { "main": [ [ { "node": "Log Action to Sheet", "type": "main", "index": 0 } ] ] },
+    "List Docs for Summary": { "main": [ [ { "node": "Download Doc", "type": "main", "index": 0 } ] ] },
+    "Download Doc": { "main": [ [ { "node": "Summarize with OpenAI", "type": "main", "index": 0 } ] ] },
+    "Summarize with OpenAI": { "main": [ [ { "node": "Format Summary Reply", "type": "main", "index": 0 } ] ] },
+    "Format Summary Reply": { "main": [ [ { "node": "Log Action to Sheet", "type": "main", "index": 0 } ] ] },
+    "Check Delete Confirm": {
+        "main": [
+            [ { "node": "Delete File", "type": "main", "index": 0 } ],
+            [ { "node": "Ask for Confirmation", "type": "main", "index": 0 } ]
+        ]
+    },
+    "Ask for Confirmation": { "main": [ [ { "node": "Send Reply", "type": "main", "index": 0 } ] ] },
+    "Delete File": { "main": [ [ { "node": "Format Delete Success", "type": "main", "index": 0 } ] ] },
+    "Format Delete Success": { "main": [ [ { "node": "Log Action to Sheet", "type": "main", "index": 0 } ] ] },
+    "Log Action to Sheet": { "main": [ [ { "node": "Send Reply", "type": "main", "index": 0 } ] ] }
+  }
+}

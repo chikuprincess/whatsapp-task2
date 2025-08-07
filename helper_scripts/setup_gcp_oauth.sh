@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# This is a helper script with instructions, not for execution.
+# It guides you through creating Google OAuth credentials for n8n.
+
+echo "--- Google Cloud OAuth Setup Guide for n8n ---"
+echo ""
+echo "Step 1: Go to the Google Cloud Console -> https://console.cloud.google.com/"
+echo "Step 2: Create a new project (e.g., 'n8n-integrations')."
+echo "Step 3: Go to 'APIs & Services' -> 'Library'."
+echo "Step 4: Search for and ENABLE the following APIs:"
+echo "   - Google Drive API"
+echo "   - Google Sheets API"
+echo ""
+echo "Step 5: Go to 'APIs & Services' -> 'OAuth consent screen'."
+echo "   - Choose 'External' user type."
+echo "   - Fill in the required app information (app name, user support email)."
+echo "   - Scopes: You don't need to add scopes here, n8n will request them."
+echo "   - Test users: Add the email address of the Google account you'll use to authenticate in n8n."
+echo ""
+echo "Step 6: Go to 'APIs & Services' -> 'Credentials'."
+echo "   - Click '+ CREATE CREDENTIALS' -> 'OAuth client ID'."
+echo "   - Application type: 'Web application'."
+echo "   - Name: 'n8n Client'"
+echo "   - Authorized redirect URIs: Add the URL from your n8n Google OAuth credential setup screen."
+echo "     It will look like: https://YOUR_N8N_DOMAIN/rest/oauth2-credentials/callback"
+echo ""
+echo "Step 7: Click 'CREATE'. A pop-up will show your Client ID and Client Secret."
+echo "Step 8: Copy these values into your n8n Google OAuth credential."
+echo ""
+echo "--- Setup Complete ---"
